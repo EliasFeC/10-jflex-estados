@@ -1,55 +1,60 @@
 %%
 
-%standalone    // Habilitar a execução independente (sem JCup).
-%class Scanner // Nome da classe gerada.
-%line          // Habilita rastreamento da linha atual.
-%column        // Habilita rastreamento da coluna atual.
-%type void     // Especifica o tipo de retorno do yylex().
+%standalone    
+%class Scanner 
+%line         
+%column        
+%type void     
+%unicode
 
 %{
-    // Variável para armazenar o comentário (StringBuilder melhora o desempenho):
-    private StringBuilder comentario = new StringBuilder();
+    private String numero, titulo, dataPublicacao, resumo, reivindicacoes;
+    private StringBuilder buffer = new StringBuilder();
 
-    // Método auxiliar para imprimir o comentário:
-    private void imprimirComentario(String texto, int linha, int coluna) {
-        System.out.println("Comentário (linha: " + linha + ", coluna: " + coluna + "): " + texto.trim());
+
+    private void exibirResultado() {
+        System.out.println("Número"  + numero);
+        System.out.println("Título"  + titulo);
+        System.out.println("Data de Pubicação"  + dataPublicacao);
+        System.out.println("Resumo"  + resumo);
+        System.out.println("Reivindicações"  + reivindicacoes);
+    }
+
+    private String limpar(String texto) {
+        return texto.replaceAll("<[^>]+>", "").trim();
     }
 %}
 
-// Nome personalizado do estado:
-%states LINHA_COMENTARIO 
-
 %%
+    <!-- Ignorar qualquer coisa fora das tags relevantes -->
+[^<]+               { /* ignora texto irrelevante */}
+<[^>]+>             { /* ignora tags não reconhecidas */}
 
-<YYINITIAL> {
-    "//" {
-        yybegin(LINHA_COMENTARIO);  // Entra no estado de comentário.
-        comentario.setLength(0);    // Limpa o buffer.
-    }
+"<span class=\"numero\">"                { buffer.setLength(0); }
+"</span>"                                { numero = limpar(buffer.toString()); }
 
-    [^] { /* Ignorar qualquer caracter fora de comentários. */ }
+"<h1 class=\titulo\">"                   { buffer.setLength(0); }
+"</h1>"                                  { titulo = limpar(buffer.toString()); }
+
+"<time class=\data-publicacao\">"        { buffer.setLength(0); }
+"</time>"                                { dataPublicacao = limpar(buffer.toString()); }
+
+"<section class=\resumo\">"              { buffer.setLength(0); }
+"</section>"                             { 
+                                            if ( resumo == null)
+                                                resumo = limpar(buffer.toString());
+                                            else
+                                                reivindicacoes = limpar (buffer.toString());
+                                            }
+
+
+[^<]+ {buffer.append(yytext()); }
+
+
+<<EOF>> { 
+    exibirResultado();
+    return;
 }
-
-<LINHA_COMENTARIO> {
-    \n {
-        yybegin(YYINITIAL);  // Retorna ao estado inicial.
-        imprimirComentario(comentario.toString(), yyline, yycolumn);
-        comentario.setLength(0);    // Limpa o buffer.
-    }
-
-    [^\n]+ { comentario.append(yytext()); }  // Acumula conteúdo do comentário (captura tudo até a quebra de linha).
-}
-
-
-<<EOF>> { // Garantir que, se o último comentário não terminar com \n, ele ainda será impresso antes de sair.
-    // Se o arquivo terminar enquanto estamos no comentário:
-    if (comentario.length() > 0) {
-        imprimirComentario(comentario.toString(), yyline, yycolumn);
-        comentario.setLength(0);    // Limpa o buffer.
-    }
-    System.out.println("Fim do arquivo!");
-
-    return; //Termina a execução.
-}
+    
 
 /*
